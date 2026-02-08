@@ -1,7 +1,7 @@
 // Import Firebase Admin
 const admin = require("firebase-admin");
 // Import your service account JSON
-const serviceAccount = require("./serviceAccountKey.json");
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
 // Initialize Firebase Admin
 admin.initializeApp({
