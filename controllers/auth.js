@@ -2,8 +2,8 @@ import bcrypt from "bcrypt";
 import client from '../db.js'; 
 import jwt from 'jsonwebtoken';
 import { randomUUID } from "crypto";
-import supabase from '/myserver/supabase.js'
-import admin from '/myserver/firebase_admin.js'
+import supabase from '../supabase.js';
+import admin from '../firebase_admin.js';
 
 
 //sign up for the account
