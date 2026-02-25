@@ -166,7 +166,7 @@ export const makeDirectChat = async (req, res) => {
     const sender = req.user.id;
     const reciever = req.body.recieverId;
     const randomChatId = randomUUID();
-    print(sender, reciever, randomChatId);
+    consle.log(sender, reciever, randomChatId);
     await client.query("INSERT INTO chats(id,type) VALUES($1,'DIRECT')", [randomChatId]);
     await client.query("INSERT INTO members (chat_id, user_id) VALUES ($1, $2), ($1, $3)",[randomChatId,sender,reciever]);
     return res.status(200).json({'chat_id' : randomChatId});
