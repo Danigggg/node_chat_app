@@ -163,12 +163,12 @@ export const apiUsers = async (req,res) => {
 
 export const makeDirectChat = async (req, res) => {
   try{
-    const sender = req.body.senderId;
+    const sender = req.user.id;
     const reciever = req.body.recieverId;
     const randomChatId = randomUUID();
     await client.query("INSERT INTO chats(id,type) VALUES($1,'DIRECT')", [randomChatId]);
     await client.query("INSERT INTO members (chat_id, user_id) VALUES ($1, $2), ($1, $3)",[randomChatId,sender,reciever]);
-    return res.status(200).json({chatId : randomChatId});
+    return res.status(200).json({'chat_id' : randomChatId});
   }
   catch(error){
     console.log(error);
@@ -194,33 +194,37 @@ export const getDirectChat = async (req,res) => {
 
 export const getMyChats = async (req, res) => {
   try {
-    const user_id = req.body.user_id;
+    const user_id = req.user.id;
 
     const resultDIRECTS = await client.query(
       `
-      SELECT 
-        username,
-        profile_image,
-        m2.user_id,
-        m2.chat_id,
-        m.time,
-        m.image,
-        m.text,
-        type
+      SELECT
+          u.username,
+          u.profile_image,
+          m2.user_id,
+          m2.chat_id,
+          lm.time,
+          lm.image,
+          lm.text,
+          c.type
       FROM members m1
-      JOIN members m2 
+      JOIN members m2
           ON m1.chat_id = m2.chat_id
-      JOIN users 
-          ON users.id = m2.user_id
-      LEFT JOIN messages m 
-          ON m.chat_id = m2.chat_id
-      JOIN chats 
-          ON m2.chat_id = chats.id
+      JOIN users u
+          ON u.id = m2.user_id
+      JOIN chats c
+          ON c.id = m2.chat_id
+      LEFT JOIN LATERAL (
+          SELECT time, image, text
+          FROM messages
+          WHERE chat_id = m2.chat_id
+          ORDER BY time DESC
+          LIMIT 1
+      ) lm ON TRUE
       WHERE m1.user_id = $1
         AND m2.user_id != $1
-        AND chats.type = 'DIRECT' 
-      ORDER BY m.time DESC NULLS LAST
-      LIMIT 1
+        AND c.type = 'DIRECT'
+      ORDER BY lm.time DESC NULLS LAST;
       `,
       [user_id]
     );
@@ -268,7 +272,7 @@ export const getMyChats = async (req, res) => {
 export const getMessagesInChat = async(req,res) => {
   try{
     const chatId = req.body.chat_id;
-    const result = await client.query("SELECT id,sender_id,text,time,image FROM messages WHERE chat_id = $1 ORDER BY time ASC",[chatId]);
+    const result = await client.query("SELECT id,sender_id,text,time,image,sent_by_system FROM messages WHERE chat_id = $1 ORDER BY time ASC",[chatId]);
     return res.status(200).json({query:result.rows});
   }catch(error){
     console.log(error);
@@ -301,14 +305,14 @@ export const sendMessage = async(req,res) => {
       const random_id_Photo= randomUUID();
       const filePath = `${chat_id}/${random_id_Photo}.png`;
       const { data, error } = await supabase.storage
-        .from('photos')
+        .from('photomessages')
         .upload(filePath, filePhoto.buffer, {
           contentType: filePhoto.mimetype,
           upsert: true,
       });
 
       if (error) throw error;
-      publicUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/photos/${data.path}`;
+      publicUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/photomessages/${data.path}`;
 
       await client.query("INSERT INTO messages(id, sender_id, text, time, chat_id, image) VALUES ($1, $2, $3, $4, $5, $6)",[id,user,text,time,chat_id,publicUrl])
     }
@@ -458,3 +462,56 @@ export const changePhoto = async (req, res) => {
   }
 };
 
+export const retrieveChatId = async (req,res) => {
+  try{
+    const userId = req.user.id;
+    const recieverId = req.body.recieverId;
+    const result = await client.query("SELECT m1.chat_id FROM members m1 JOIN members m2 ON m1.chat_id = m2.chat_id AND m1.user_id = $1 AND m2.user_id = $2 JOIN chats ON chats.id = m1.chat_id AND type='DIRECT' ",[userId, recieverId]);
+    if(result.rows.length == 0){
+      return res.status(200).json({'chat_id':''})
+    }
+    return res.status(200).json({'chat_id':result.rows[0].chat_id});
+  }catch(e){
+    console.log(e);
+    return res.status(500).json({'message':'Errore'});
+  }
+}
+
+
+export const createGroup = async(req,res) => {
+  try{
+    const chatId = randomUUID();
+    const name = req.body.name;
+    const members = JSON.parse(req.body.members);
+    const time = req.body.time;
+    if(req.file != null){
+      const file = req.file;
+      const filePath = `${chatId}/profile_photo.png`;
+      const { data, error } = await supabase.storage
+        .from('photos')
+        .upload(filePath, file.buffer, {
+          contentType: file.mimetype,
+          upsert: true,
+      });
+      const publicUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/photos/${data.path}`;
+      await client.query('INSERT INTO chats (id,type,name, referencing_photo) VALUES($1,$2,$3,$4)',[chatId,'GROUP',name, publicUrl]);
+    }
+    else{
+      await client.query('INSERT INTO chats (id,type,name) VALUES($1,$2,$3)',[chatId,'GROUP',name]);
+    }
+    const placeholders = members.map((_, i) => `($${i*2+1}, $${i*2+2})`).join(', ');
+    const valuesArray = members.flatMap(user => [user, chatId]);
+    await client.query(`
+      INSERT INTO members (user_id, chat_id )
+      VALUES ${placeholders}
+    `,valuesArray);
+    
+    const mesId = randomUUID();
+    await client.query('INSERT INTO messages (id,text,time,chat_id,sent_by_system) VALUES($1,$2,$3,$4,$5)',[mesId,"Nuovo Gruppo Creato!",time,chatId,'TRUE'])
+    return res.status(200).json();
+  }catch(e){
+    console.log(e);
+    return res.status(500).json({'message':'Errore'});
+  }
+
+}

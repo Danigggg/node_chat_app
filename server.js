@@ -1,5 +1,5 @@
 const client = require('./db');
-const { signup, login, authenticateToken, loginJWT, token, apiUsers, getMyChats, insertFCMToken, makeDirectChat, getDirectChat, getUsername, getMessagesInChat, sendMessage, getImageProfile, getIdAndUsername, changePhoto, getFile } = require('./controllers/auth');
+const { signup, login, authenticateToken, loginJWT, token, apiUsers, getMyChats, insertFCMToken, makeDirectChat, getDirectChat, getUsername, getMessagesInChat, sendMessage, getImageProfile, getIdAndUsername, changePhoto, getFile, retrieveChatId, createGroup } = require('./controllers/auth');
 const express = require("express");
 const cors = require("cors");
 const app = express();
@@ -27,15 +27,17 @@ app.post('/api/insertFCMToken',authenticateToken,insertFCMToken);
 
 app.post('/api/getUsername', authenticateToken, getUsername);
 
-app.post('/api/makeDirectChat',makeDirectChat);
+app.post('/api/makeDirectChat', authenticateToken, makeDirectChat);
 
 app.post('/api/getDirectChat', getDirectChat);
 
-app.post('/api/getMychats', getMyChats);
+app.get('/api/getMychats', authenticateToken,getMyChats);
 
 app.post('/api/getMessagesInChat', authenticateToken, getMessagesInChat);
 
 app.post('/api/sendMessage',authenticateToken,upload.single('photo'),sendMessage);
+
+app.post('/api/createGroup',authenticateToken, upload.single('photo'), createGroup);
 
 
 app.post('/api/getImageProfile', getImageProfile);
@@ -49,7 +51,7 @@ app.post(
 
 app.post('/api/getIdAndUsername', authenticateToken,getIdAndUsername);
 
-
+app.post('/api/retrieveChatId',authenticateToken, retrieveChatId);
 server.listen(process.env.PORT, () => {
   console.log('Server running on port 3000');
 });
