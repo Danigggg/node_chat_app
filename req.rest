@@ -1,8 +1,1 @@
-POST http://localhost:3000/api/getMyChats
-Content-Type: application/json
-
-{
-    "senderId" : "205a878d-1a56-4a0e-a8c0-f7f36c3ee480",
-    "recieverId" : "673c983a-4bbc-4c83-9cc6-3c61978ac258"
-}
 
